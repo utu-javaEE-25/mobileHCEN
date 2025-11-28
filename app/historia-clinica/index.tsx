@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 
-// Ajustá si tu API_BASE_URL está en otro archivo
 const API_BASE_URL = "http://hcenuy.web.elasticloud.uy/Laboratorio";
 
 export default function HistoriaClinicaListado() {
@@ -21,14 +20,13 @@ export default function HistoriaClinicaListado() {
     const [loading, setLoading] = useState(true);
     const [documentos, setDocumentos] = useState([]);
 
-    // 1. Obtener sesión desde globalThis (tu app ya lo hace así)
     useEffect(() => {
         if (globalThis.sessionCookie) {
             setSessionCookie(globalThis.sessionCookie);
         }
     }, []);
 
-    // 2. Llamar al endpoint real de backend
+    // 🔵 Cargar historia desde el endpoint REAL
     const cargarHistoriaClinica = useCallback(async () => {
         if (!sessionCookie) return;
 
@@ -36,7 +34,7 @@ export default function HistoriaClinicaListado() {
             setLoading(true);
 
             const resp = await fetch(
-                `${API_BASE_URL}/api/historia-clinica/mi-historia`,
+                `${API_BASE_URL}/historia-clinica/mi-historia`,
                 {
                     method: "GET",
                     headers: {
@@ -51,26 +49,19 @@ export default function HistoriaClinicaListado() {
                 return;
             }
 
-            if (resp.status === 404) {
+            if (!resp.ok) {
+                console.log("HC error:", resp.status);
                 setDocumentos([]);
                 setLoading(false);
                 return;
             }
 
-            if (!resp.ok) {
-                const text = await resp.text().catch(() => "");
-                console.log("Error backend:", resp.status, text);
-                Alert.alert("Error", "No se pudo obtener la historia clínica.");
-                setLoading(false);
-                return;
-            }
-
             const json = await resp.json();
-            setDocumentos(json);
+            setDocumentos(json || []);
 
         } catch (e) {
-            console.log("Error fetch HC:", e);
-            Alert.alert("Error", "Error de conexión con el servidor.");
+            console.log("Error HCEN:", e);
+            Alert.alert("Error", "No se pudo obtener la historia clínica.");
         } finally {
             setLoading(false);
         }
@@ -80,8 +71,17 @@ export default function HistoriaClinicaListado() {
         cargarHistoriaClinica();
     }, [cargarHistoriaClinica]);
 
-    const abrirDetalle = (id: string) => {
-        router.push(`/historia-clinica/${id}`);
+    // 🔵 Cambiamos el ID → HCEN usa idExternaDoc
+    const abrirDetalle = (doc) => {
+        router.push({
+            pathname: "/historia-clinica/[id]",
+            params: {
+                id: doc.idExternaDoc,
+                prestador: doc.prestador,
+                tipoDocumento: doc.tipoDocumento,
+                fecha: doc.fechaCreacion
+            }
+        });
     };
 
     return (
@@ -97,16 +97,16 @@ export default function HistoriaClinicaListado() {
             ) : (
                 <FlatList
                     data={documentos}
-                    keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                    keyExtractor={(item) => item.idExternaDoc?.toString()}
                     renderItem={({ item }) => (
                         <TouchableOpacity
                             style={styles.card}
-                            onPress={() => abrirDetalle(item.id)}
+                            onPress={() => abrirDetalle(item)}
                         >
-                            <Text style={styles.itemTitle}>{item.tipo || "Documento"}</Text>
+                            <Text style={styles.itemTitle}>{item.tipoDocumento}</Text>
                             <Text style={styles.itemPrestador}>{item.prestador}</Text>
                             <Text style={styles.itemFecha}>
-                                {new Date(item.fecha).toLocaleString()}
+                                {new Date(item.fechaCreacion).toLocaleString()}
                             </Text>
                         </TouchableOpacity>
                     )}
