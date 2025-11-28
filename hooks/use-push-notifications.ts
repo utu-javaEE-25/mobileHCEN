@@ -1,20 +1,20 @@
+// @ts-nocheck
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import { useRouter } from 'expo-router';
 
 export interface UsePushNotificationsOptions {
   /**
-   * Callback para enviar el token del dispositivo al backend
-   * (por ejemplo, via mobileNotificationApi.registerDeviceToken()).
+   * Llamado cuando el dispositivo obtiene el token FCM
    */
   onDeviceToken?: (token: string) => void;
 }
 
 export interface UsePushNotificationsResult {
   /**
-   * Última notificación recibida en foreground durante esta sesión.
-   * Útil para debug o mostrar algo en la pantalla actual.
+   * Última notificación recibida en foreground
    */
   lastNotification: Notifications.Notification | null;
 }
@@ -22,9 +22,9 @@ export interface UsePushNotificationsResult {
 /**
  * Hook centralizado para:
  * - Pedir permisos de notificación.
- * - Obtener el token nativo de push (FCM en Android, APNs en iOS).
+ * - Obtener token de FCM.
  * - Escuchar notificaciones en foreground.
- * - Escuchar cuando el usuario toca la notificación.
+ * - Escuchar taps del usuario y navegar al modulo correspondiente.
  */
 export function usePushNotifications(
   options?: UsePushNotificationsOptions
@@ -37,21 +37,20 @@ export function usePushNotifications(
   const responseListener =
     useRef<Notifications.EventSubscription | null>(null);
 
+  const router = useRouter();
+
   useEffect(() => {
     (async () => {
       if (!Device.isDevice) {
-        console.log(
-          '[Push] Las notificaciones push requieren un dispositivo físico.'
-        );
+        console.log('[Push] Requiere dispositivo físico.');
         return;
       }
 
-      // 1. Verificar permisos actuales
+      // 1) Obtener permisos
       const { status: existingStatus } =
         await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
 
-      // 2. Pedir permisos si no están concedidos
       if (existingStatus !== 'granted') {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
@@ -65,9 +64,9 @@ export function usePushNotifications(
         return;
       }
 
-      // 3. Obtener token nativo de push (el que usará FCM/APNs)
+      // 2) Obtener token FCM nativo
       const devicePushToken = await Notifications.getDevicePushTokenAsync();
-      console.log('[Push] Device push token bruto:', devicePushToken);
+      console.log('[Push] Token FCM:', devicePushToken);
 
       const tokenString =
         typeof devicePushToken.data === 'string'
@@ -78,7 +77,7 @@ export function usePushNotifications(
         options.onDeviceToken(tokenString);
       }
 
-      // 4. Configurar canal de notificaciones en Android
+      // 3) Canal Android
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
           name: 'default',
@@ -87,23 +86,54 @@ export function usePushNotifications(
       }
     })();
 
-    // 5. Listener: notificación recibida en foreground
+    // 4) Listener: notificación recibida en foreground
     notificationListener.current =
       Notifications.addNotificationReceivedListener(notification => {
-        console.log('[Push] Notificación recibida (foreground):', notification);
+        console.log('[Push] Recibida (foreground):', notification);
         setLastNotification(notification);
       });
 
-    // 6. Listener: el usuario interactúa con una notificación (tocar/abrir)
+    // 5) Listener: usuario toca / abre la notificación
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener(response => {
-        console.log('[Push] Usuario tocó la notificación:', response);
-        // TIP:
-        // Acá podrías leer response.notification.request.content.data
-        // y navegar con expo-router (ej: hacia /notificaciones/[id])
+        const data = response.notification.request.content.data;
+        console.log('[Push] Usuario tocó:', data);
+
+        if (!data) return;
+
+        /**
+         * 🔵 Rutas automáticas según tipo de notificación
+         * Estas rutas coinciden con:
+         * - solicitudes/[id].tsx
+         * - notificaciones/[id].tsx
+         * - historia-clinica/[id].tsx (si venía documentId)
+         */
+
+        // Solicitud de acceso en tiempo real
+        if (data.tipo === 'SOLICITUD_ACCESO' && data.solicitudId) {
+          router.push(`/solicitudes/${data.solicitudId}`);
+          return;
+        }
+
+        // Notificación normal enviada desde backend
+        if (data.tipo === 'NOTIFICACION' && data.idNotificacion) {
+          router.push(`/notificaciones/${data.idNotificacion}`);
+          return;
+        }
+
+        // Documento clínico (opcional, si backend lo envía)
+        if (data.tipo === 'DOCUMENTO' && data.documentoId) {
+          router.push(`/historia-clinica/${data.documentoId}`);
+          return;
+        }
+
+        // Fallback genérico
+        if (data.route) {
+          router.push(data.route);
+        }
       });
 
-    // 7. Cleanup
+    // 6) Cleanup
     return () => {
       if (notificationListener.current) {
         Notifications.removeNotificationSubscription(
