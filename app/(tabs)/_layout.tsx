@@ -39,6 +39,29 @@ export default function TabLayout() {
         }}
       />
 
+      {/* Notificaciones */}
+      <Tabs.Screen
+        name="notificaciones/index"
+        options={{
+          title: 'Notificaciones',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="bell.badge.fill" color={color} />
+          ),
+        }}
+      />
+
+      {/* Historial de Accesos */}
+      <Tabs.Screen
+        name="historial-accesos/index"
+        options={{
+          title: 'Accesos',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="clock.arrow.circlepath" color={color} />
+          ),
+        }}
+      />
+
+
       {/* Historia Clínica */}
       <Tabs.Screen
         name="historia-clinica/index"
@@ -50,5 +73,7 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+
+
   );
 }
