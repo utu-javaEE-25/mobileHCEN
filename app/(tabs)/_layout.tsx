@@ -61,6 +61,18 @@ export default function TabLayout() {
         }}
       />
 
+      {/* Solicitudes de Acceso */}
+      <Tabs.Screen
+        name="solicitudes/index"
+        options={{
+          title: "Solicitudes",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="exclamationmark.bubble.fill" color={color} />
+          )
+        }}
+      />
+
+
 
       {/* Historia Clínica */}
       <Tabs.Screen
